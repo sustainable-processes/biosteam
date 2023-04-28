@@ -7,7 +7,7 @@
 # for license details.
 """
 """
-from biosteam.utils import format_title
+from ..utils import format_title
 __all__ = ('element_name',)
 
 def element_name(element):

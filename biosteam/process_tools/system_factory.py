@@ -11,8 +11,8 @@
 import thermosteam as tmo
 import biosteam as bst
 from .._unit import streams
-from biosteam.utils import as_stream
-from biosteam.process_tools import utils
+from ..utils import as_stream
+from ..process_tools import utils
 from inspect import signature
 
 __all__ = ('SystemFactory', 'stream_kwargs')

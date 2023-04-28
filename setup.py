@@ -16,13 +16,13 @@ setup(
     long_description=open('README.rst', encoding='utf-8').read(),
     author='Yoel Cortes-Pena',
     install_requires=['IPython>=7.9.0',
-                      'thermosteam>=0.33.0,<0.34.0', 
+                    #   'thermosteam>=0.33.0,<0.34.0', 
                       'graphviz>=0.17',
                       'chaospy>=3.3.9',
                       'pyyaml'],
     extras_require={ 
         'dev': [
-            'biorefineries>=2.23.16',
+            # 'biorefineries>=2.23.16',
             'sympy',
             'sphinx', 
             'sphinx_multitoc_numbering', 

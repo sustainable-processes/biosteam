@@ -18,10 +18,10 @@ from ._metric import Metric
 from ._feature import MockFeature
 from ._parameter import Parameter
 from ._utils import var_indices, var_columns, indices_to_multiindex
-from biosteam.exceptions import FailedEvaluation
+from ..exceptions import FailedEvaluation
 from warnings import warn
 from collections.abc import Sized
-from biosteam.utils import TicToc
+from ..utils import TicToc
 import pickle
 
 __all__ = ('Model',)
@@ -546,7 +546,7 @@ class Model(State):
         
         # Initialize timer
         if notify_coordinate:
-            from biosteam.utils import TicToc
+            from ..utils import TicToc
             timer = TicToc()
             timer.tic()
             def evaluate():

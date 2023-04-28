@@ -24,7 +24,7 @@ from thermosteam import Stream
 from thermosteam.base import display_asfunctor
 from numpy.typing import NDArray
 from typing import Callable, Optional, TYPE_CHECKING, Sequence, Iterable
-import thermosteam as tmo
+import thermosteam as tmo 
 if TYPE_CHECKING: 
     System = bst.System
     HXutility = bst.HXutility

@@ -7,9 +7,9 @@
 # for license details.
 """
 """
-from thermosteam import Stream
+from biosteam import Stream
 import yaml
-import os
+import os 
 
 __all__ = ('preferences', 'TemporaryPreferences')
 

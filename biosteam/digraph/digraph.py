@@ -9,10 +9,10 @@
 """
 """
 import numpy as np
-from biosteam.utils.piping import ignore_docking_warnings
+from ..utils.piping import ignore_docking_warnings
 from warnings import warn
 import biosteam as bst
-from biosteam.utils.piping import Connection
+from ..utils.piping import Connection
 from graphviz import Digraph
 from IPython import display
 from thermosteam import Stream
@@ -21,6 +21,7 @@ from typing import Optional
 import urllib
 import os
 import re
+
 
 __all__ = ('digraph_from_system',
            'digraph_from_units',
