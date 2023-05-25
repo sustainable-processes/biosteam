@@ -152,7 +152,33 @@ class DrumDryer(Unit):
         design_results['Peripheral drum area'] = cylinder_area(diameter, length)
         if self.utility_agent == 'Steam':
             self.add_heat_utility(self.H_out - self.H_in, self.T)
-        
+
+class SimpleDryer(Unit): #Added simple dryer without utilities (later)
+    @property
+    def isplit(self):
+        """[ChemicalIndexer] Componentwise split of feed to 0th outlet stream."""
+        return self._isplit
+    @property
+    def split(self):
+        """[Array] Componentwise split of feed to 0th outlet stream."""
+        return self._isplit.data
+    def __init__(self, ID="", ins=None, outs=(), thermo=None, *,
+                 split, R=1.4, H=20., length_to_diameter=25, T=343.15, P=10*101325,
+                 moisture_content=0.15, utility_agent='Natural gas',
+                 moisture_ID=None):
+        super().__init__(ID, ins, outs, thermo)
+        self._isplit = self.chemicals.isplit(split)
+        self.define_utility('Natural gas', self.natural_gas)
+        self.P = P
+        self.T = T
+        self.R = R
+        self.H = H
+        self.length_to_diameter = length_to_diameter
+        self.moisture_content = moisture_content
+        self.utility_agent = utility_agent
+        self.moisture_ID = moisture_ID
+    
+           
         
 class ThermalOxidizer(Unit):
     """
