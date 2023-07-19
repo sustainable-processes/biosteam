@@ -8,7 +8,6 @@
 """
 """
 from thermosteam.utils import plots
-
 from thermosteam.utils.plots import *
 from biosteam.utils import colors
 from typing import NamedTuple, Iterable, Callable

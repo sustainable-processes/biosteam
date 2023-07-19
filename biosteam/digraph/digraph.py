@@ -12,6 +12,7 @@ import numpy as np
 from ..utils.piping import ignore_docking_warnings
 from warnings import warn
 import biosteam as bst
+# import biosteam.biosteam as bst
 from ..utils.piping import Connection
 from graphviz import Digraph
 from IPython import display
