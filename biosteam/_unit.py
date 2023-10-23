@@ -1089,7 +1089,7 @@ class Unit:
     def __sub__(self, other):
         """Source streams."""
         isa = isinstance
-        int_types = (int, np.int)
+        int_types = (int, np.int64, np.int32)
         if isa(other, (Unit, bst.System)):
             other._ins[:] = self._outs
             return other
@@ -1111,7 +1111,7 @@ class Unit:
     def __rsub__(self, other):
         """Sink streams."""
         isa = isinstance
-        int_types = (int, np.int)
+        int_types = (int, np.int64, np.int32)
         if isa(other, int_types):
             return self._ins[other]
         elif isa(other, Stream):

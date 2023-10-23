@@ -413,7 +413,7 @@ def plot_unit_groups(unit_groups, colors=None,
             bar_labels = [f"{format_total(i())}\n[{format_units(i.units)}]"
                           for i in joint_group.metrics]
         # bar_labels = [r"$\mathbf{" + i + "}$" for i in bar_labels]
-        df.T.plot(kind='bar', stacked=True, edgecolor='k', **kwargs)
+        df.T.plot(kind='bar', stacked=True, edgecolor='k',figsize=(12, 6), **kwargs)
         locs, labels = plt.xticks()
         plt.xticks(locs, ['\n['.join(i.get_text().split(' [')) for i in labels])
         if legend: plt.legend(bbox_to_anchor=(1.05, 1.0), loc='upper left')
