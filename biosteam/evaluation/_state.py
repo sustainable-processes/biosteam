@@ -13,6 +13,8 @@ from ._feature import MockFeature
 from .. import System
 import numpy as np
 import pandas as pd
+import matplotlib.pyplot as plt
+from thermosteam.utils import colors
 from .evaluation_tools import load_default_parameters
 
 __all__ = ('State',)
@@ -68,7 +70,6 @@ class State:
         '_parameters', # list[Parameter] All parameters.
         '_specification', # [function] Loads specifications once all parameters are set.
     ) 
-    
     load_default_parameters = load_default_parameters
     
     def __init__(self, system, specification=None, parameters=None):
@@ -100,6 +101,10 @@ class State:
     @property
     def system(self):
         return self._system
+    
+    @property
+    def features(self):
+        return self.get_parameters()
     
     def __len__(self):
         return len(self._parameters)
@@ -133,12 +138,11 @@ class State:
     
     def set_parameters(self, parameters):
         """Set parameters."""
-        parameters = list(parameters)
+        self._parameters = parameters = list(parameters)
         isa = isinstance
         for i in parameters:
             assert isa(i, Parameter), 'all elements must be Parameter objects'
-        Parameter.check_indices_unique(parameters)
-        self._parameters = parameters
+        Parameter.check_indices_unique(self.features)
     
     def get_parameters(self):
         """Return parameters."""
@@ -246,7 +250,7 @@ class State:
         p = Parameter(name, setter, element,
                       self.system, distribution, units, 
                       baseline, bounds, kind, hook, description, scale)
-        Parameter.check_index_unique(p, self._parameters)
+        Parameter.check_index_unique(p, self.features)
         self._parameters.append(p)
         return p
     
@@ -343,50 +347,23 @@ class State:
             elif rule == 'RBD':
                 from SALib.sample import latin as sampler
             elif rule == 'SOBOL' or rule == 'SALTELLI':
-                from SALib.sample import saltelli as sampler
+                from SALib.sample import sobol as sampler
             else:
                 raise ValueError(f"invalid rule '{rule}'")
             problem = kwargs.pop('problem') if 'problem' in kwargs else self.problem()
             samples = sampler.sample(problem, N=N, **kwargs)
         return samples
     
-    def _update_state(self, sample, **kwargs):
+    def _update_state(self, sample, convergence_model=None, **kwargs):
         for f, s in zip(self._parameters, sample): 
             f.setter(s if f.scale is None else f.scale * s)
-        return self._specification() if self._specification else self._system.simulate(**kwargs)
+        if convergence_model:
+            with convergence_model.practice(sample):
+                return self._specification() if self._specification else self._system.simulate(**kwargs)
+        else:
+            return self._specification() if self._specification else self._system.simulate(**kwargs)
     
     def __call__(self, sample, **kwargs):
         """Update state given sample of parameters."""
         return self._update_state(np.asarray(sample, dtype=float), **kwargs)
-    
-    def _repr(self):
-        return f'{type(self).__name__}: {self._system}'
-    
-    def __repr__(self):
-        return '<' + self._repr() + '>'
-    
-    def _info(self):
-        if not self._parameters: return f'{self._repr()}\n (No parameters)'
-        lines = []
-        lengths_block = []
-        lastblk = None
-        for i in self._parameters:
-            blk = i.element_name
-            element = len(blk)*' ' if blk==lastblk else blk
-            lines.append(f" {element}${i.name}\n")
-            lastblk = blk
-            lengths_block.append(len(blk))
-        maxlen_block = max(lengths_block)
-        out = f'{self._repr()}\n'
-        maxlen_block = max(maxlen_block, 7)
-        out += ' Element:' + (maxlen_block - 7)*' ' + ' Parameter:\n'
-        for newline, len_ in zip(lines, lengths_block):
-            newline = newline.replace('$', ' '*(maxlen_block-len_) + '  ')
-            out += newline
-        return out.rstrip('\n ')
-    
-    def show(self):
-        """Return information on metric parameters."""
-        print(self._info())
-    _ipython_display_ = show
     

@@ -12,7 +12,7 @@ import biosteam as bst
 from .. import Unit
 from .mixing import Mixer
 from .heat_exchange import HXutility
-from ._flash import Flash, Evaporator_PQ, Evaporator_PV
+from ._flash import Flash, Evaporator
 from .design_tools import (
     compute_vacuum_system_power_and_cost,
     compute_heat_transfer_area
@@ -109,32 +109,32 @@ class MultiEffectEvaporator(Unit):
         phase: 'l', T: 333.21 K, P: 20000 Pa
         flow (kmol/hr): Water       20.5
                         AceticAcid  0.00183
-                        Furfural    6e-05
+                        Furfural    5.96e-05
                         HMF         0.000793
                         Glucose     0.555
     [1] liquid
-        phase: 'l', T: 352.13 K, P: 20000 Pa
+        phase: 'l', T: 352.11 K, P: 20000 Pa
         flow (kmol/hr): Water       35
-                        AceticAcid  0.00649
+                        AceticAcid  0.0065
                         Furfural    0.000981
     
     >>> E1.results()
     Multi-effect evaporator                                    Units       E1
     Electricity         Power                                     kW     5.72
                         Cost                                  USD/hr    0.447
-    Low pressure steam  Duty                                   kJ/hr 5.81e+05
-                        Flow                                 kmol/hr       15
-                        Cost                                  USD/hr     3.56
+    Low pressure steam  Duty                                   kJ/hr 5.83e+05
+                        Flow                                 kmol/hr     15.1
+                        Cost                                  USD/hr     3.58
     Cooling water       Duty                                   kJ/hr -3.5e+05
                         Flow                                 kmol/hr      239
                         Cost                                  USD/hr    0.117
     Design              Area                                     m^2       11
-                        Volume                                   m^3     1.24
-    Purchase cost       Evaporators                              USD  9.6e+03
+                        Volume                                   m^3     3.51
+    Purchase cost       Evaporators (x5)                         USD 9.56e+03
                         Condenser - Double pipe                  USD 5.36e+03
                         Vacuum system - Liquid-ring pump...      USD 1.24e+04
-    Total purchase cost                                          USD 2.74e+04
-    Utility cost                                              USD/hr     4.13
+    Total purchase cost                                          USD 2.73e+04
+    Utility cost                                              USD/hr     4.15
     
     Concentrate sugar setting overall vapor fraction:
     
@@ -167,7 +167,7 @@ class MultiEffectEvaporator(Unit):
                         HMF         0.000793
                         Glucose     0.555
     [1] liquid
-        phase: 'l', T: 361.16 K, P: 50892 Pa
+        phase: 'l', T: 361.13 K, P: 50892 Pa
         flow (kmol/hr): Water       5.55
                         AceticAcid  0.0015
                         Furfural    0.000506
@@ -176,23 +176,77 @@ class MultiEffectEvaporator(Unit):
     Multi-effect evaporator                                    Units        E1
     Electricity         Power                                     kW      5.72
                         Cost                                  USD/hr     0.447
-    Low pressure steam  Duty                                   kJ/hr  3.83e+05
-                        Flow                                 kmol/hr      9.86
-                        Cost                                  USD/hr      2.34
+    Low pressure steam  Duty                                   kJ/hr  3.84e+05
+                        Flow                                 kmol/hr      9.94
+                        Cost                                  USD/hr      2.36
     Cooling water       Duty                                   kJ/hr -1.15e+05
                         Flow                                 kmol/hr      78.8
-                        Cost                                  USD/hr    0.0385
-    Design              Area                                     m^2      1.65
-                        Volume                                   m^3      6.52
-    Purchase cost       Evaporators                              USD  2.77e+03
+                        Cost                                  USD/hr    0.0384
+    Design              Area                                     m^2      1.62
+                        Volume                                   m^3      3.07
+    Purchase cost       Evaporators (x3)                         USD  2.74e+03
                         Condenser - Double pipe                  USD   3.9e+03
                         Vacuum system - Liquid-ring pump...      USD  1.24e+04
     Total purchase cost                                          USD  1.91e+04
-    Utility cost                                              USD/hr      2.83
+    Utility cost                                              USD/hr      2.85
+    
+    Concentrate sugar setting overall vapor fraction:
+    
+    >>> import biosteam as bst
+    >>> from biorefineries.cellulosic import create_cellulosic_ethanol_chemicals
+    >>> bst.settings.set_thermo(create_cellulosic_ethanol_chemicals())
+    >>> feed = bst.Stream('feed', Water=1000, Glucose=100, 
+    ...                   AceticAcid=0.5, HMF=0.1, Furfural=0.1,
+    ...                   units='kg/hr')
+    >>> E1 = bst.MultiEffectEvaporator('E1', ins=feed, outs=('solids', 'liquid'), 
+    ...                                V=0.1, V_definition='Overall',
+    ...                                P=(101325, 73581, 50892, 32777, 20000))
+    >>> E1.simulate()
+    >>> E1.show()
+    MultiEffectEvaporator: E1
+    ins...
+    [0] feed
+        phase: 'l', T: 298.15 K, P: 101325 Pa
+        flow (kmol/hr): Water       55.5
+                        AceticAcid  0.00833
+                        Furfural    0.00104
+                        HMF         0.000793
+                        Glucose     0.555
+    outs...
+    [0] solids
+        phase: 'l', T: 354.91 K, P: 50892 Pa
+        flow (kmol/hr): Water       50
+                        AceticAcid  0.00683
+                        Furfural    0.000535
+                        HMF         0.000793
+                        Glucose     0.555
+    [1] liquid
+        phase: 'l', T: 361.13 K, P: 50892 Pa
+        flow (kmol/hr): Water       5.55
+                        AceticAcid  0.0015
+                        Furfural    0.000506
+    
+    >>> E1.results()
+    Multi-effect evaporator                                    Units        E1
+    Electricity         Power                                     kW      5.72
+                        Cost                                  USD/hr     0.447
+    Low pressure steam  Duty                                   kJ/hr  3.84e+05
+                        Flow                                 kmol/hr      9.94
+                        Cost                                  USD/hr      2.36
+    Cooling water       Duty                                   kJ/hr -1.15e+05
+                        Flow                                 kmol/hr      78.8
+                        Cost                                  USD/hr    0.0384
+    Design              Area                                     m^2      1.62
+                        Volume                                   m^3      3.07
+    Purchase cost       Evaporators (x3)                         USD  2.74e+03
+                        Condenser - Double pipe                  USD   3.9e+03
+                        Vacuum system - Liquid-ring pump...      USD  1.24e+04
+    Total purchase cost                                          USD  1.91e+04
+    Utility cost                                              USD/hr      2.85
     
     """
     line = 'Multi-effect evaporator'
-    auxiliary_unit_names = ('condenser', 'mixer', 'vacuum_system')
+    auxiliary_unit_names = ('condenser', 'mixer', 'vacuum_system', 'evaporators')
     _units = {'Area': 'm^2',
               'Volume': 'm^3'}
     _F_BM_default = {'Evaporators': 2.45,
@@ -224,25 +278,25 @@ class MultiEffectEvaporator(Unit):
         """[str] Must be one of the following:
         * 'Overall' - Defines attribute `V` as the overall molar fraction evaporated.
         * 'First-effect' - Defines attribute `V` as the molar fraction evaporated in the first effect.
+        * 'First-effect duty' - Defines attribute `V` as the supplied duty over the total duty required to achived a vapor fraction of 1 at the first effect .
         """
         return self._V_definition
     @V_definition.setter
     def V_definition(self, V_definition):
         V_definition = V_definition.capitalize()
-        if V_definition in ('Overall', 'First-effect'):
+        if V_definition in ('Overall', 'First-effect', 'First-effect duty'):
+            self._reload_components = True
             self._V_definition = V_definition
         else:
-            raise ValueError("V_definition must be either 'Overall' or 'First-effect'")
+            raise ValueError("V_definition must be either 'Overall', 'First-effect', or 'First-effect duty'")
 
-    def __init__(self, ID='', ins=None, outs=(), thermo=None, *, P, V, V_definition='Overall',
-                 flash=True, chemical='7732-18-5'):
-        Unit.__init__(self, ID, ins, outs, thermo)
+    def _init(self, P, V, V_definition='Overall',
+              flash=True, chemical='7732-18-5'):
         self.P = P #: tuple[float] Pressures describing each evaporator (Pa).
         self.V = V #: [float] Molar fraction evaporated.
         self.V_definition = V_definition
         self.flash = flash #: [bool] Whether to perform a flash calculation to account for volatile components.
         self._V_first_effect = None
-        self._reload_components = True
         self.chemical = chemical
         
     def reset_cache(self, isdynamic=None):
@@ -250,41 +304,60 @@ class MultiEffectEvaporator(Unit):
         
     def _load_components(self):
         P = self.P
-        thermo = self.thermo
-        
-        # Create components
         self._N_evap = n = len(P) # Number of evaporators
-        
+        self.evaporators = []
         if self.flash:
-            first_evaporator = Flash(None, outs=(None, None), P=P[0], thermo=thermo)
+            evaporator = self.auxiliary(
+                'evaporators', Flash,
+                ins=self.ins, 
+                outs=(None, self.outs[0] if n == 1 else None), P=P[0],
+            )
         else:
-            first_evaporator = Evaporator_PV(None, outs=(None, None), P=P[0], thermo=thermo, chemical=self.chemical)
-        # Put liquid first, then vapor side stream
-        self.evaporators = evaporators = [first_evaporator]
+            evaporator = self.auxiliary(
+                'evaporators', Evaporator,
+                ins=self.ins,
+                outs=(None, self.outs[0] if n == 1 else None), P=P[0],
+                chemical=self.chemical,
+            )
         for i in range(1, n):
-            evap = Evaporator_PQ(None, outs=(None, None, None), P=P[i], Q=0, thermo=thermo, chemical=self.chemical)
-            evaporators.append(evap)
-        
-        self.condenser = HXutility(None, outs=[None], thermo=thermo, V=0)
-        self.mixer = Mixer(None, outs=[None], thermo=thermo)
-        
-        # Set-up components
-        other_evaporators = evaporators[1:]
-        first_evaporator.ins[:] = [i.copy() for i in self.ins]
-        
-        # Put liquid first, then vapor side stream
-        ins = [first_evaporator.outs[1], first_evaporator.outs[0]]
-        for evap in other_evaporators:
-            evap.ins[:] = ins
-            ins = [evap.outs[1], evap.outs[0]]
+            evaporator = self.auxiliary(
+                'evaporators', Evaporator, 
+                # Put liquid first, then vapor side stream
+                ins=(evaporator.outs[1], evaporator.outs[0]), 
+                outs=(None, self.outs[0] if i == n-1 else None, None), 
+                P=P[i], chemical=self.chemical,
+            )
+        condenser = self.auxiliary(
+            'condenser', HXutility, ins=evaporator.outs[0], outs=[None], V=0
+        )
+        self.auxiliary(
+            'mixer', Mixer, 
+            ins=[condenser.outs[0], *[i.outs[2] for i in self.evaporators[1:]]], 
+            outs=self.outs[1]
+        )
         
     def _V_overall(self, V_first_effect):
         first_evaporator, *other_evaporators = self.evaporators
-        first_evaporator.V = V_overall = V_first_effect
+        V_definition = self.V_definition
+        chemical = self.chemical
+        feed = first_evaporator.ins[0]
+        if V_definition in ('First-effect', 'Overall'):
+            first_evaporator.V = V_overall = V_first_effect
+        elif V_definition == 'First-effect duty':
+            if isinstance(first_evaporator, Flash):
+                stream = feed.copy()
+                stream.vle(P=first_evaporator.P, V=1)
+                Hvap = stream.H - feed.H
+                Q = V_first_effect * Hvap
+            else:
+                Hvap = first_evaporator.Hvap * first_evaporator.ins[0].imol[chemical]
+                Q = V_first_effect * Hvap 
+            first_evaporator.Q = Q
+            
         first_evaporator._run()
-        for evap in other_evaporators:
-            evap._run()
-            V_overall += (1. - V_overall) * evap.V
+        for evap in other_evaporators: evap._run()
+        evaporated = self.evaporators[-1].outs[1]
+        V_overall = 1. - evaporated.imol[chemical] / feed.imol[chemical]
         return V_overall
         
     def _V_overall_objective_function(self, V_first_effect):
@@ -302,8 +375,6 @@ class MultiEffectEvaporator(Unit):
         if self._reload_components:
             self._load_components()
             self._reload_components = False
-        else:
-            self.evaporators[0].ins[:] = [i.copy() for i in ins]
         
         if self.V_definition == 'Overall':
             P = tuple(self.P)
@@ -324,36 +395,31 @@ class MultiEffectEvaporator(Unit):
             V_overall = self.V
         else: 
             V_overall = self._V_overall(self.V)
-    
-        n = self._N_evap  # Number of evaporators
+            
         evaporators = self.evaporators
         condenser = self.condenser
         mixer = self.mixer
         last_evaporator = evaporators[-1]
     
-        # Condensing vapor from last effector
-        outs_vap = last_evaporator.outs[0]
-        condenser.ins[:] = [outs_vap]
+        # Condense vapor from last effector
         condenser._run()
-        outs_liq = [condenser.outs[0]]  # list containing all output liquids
-
-        # Unpack other output streams
-        out_wt_solids.copy_like(last_evaporator.outs[1])
-        for i in range(1, n):
-            evap = evaporators[i]
-            outs_liq.append(evap.outs[2])
-
-        # Mix liquid streams
-        mixer.ins[:] = outs_liq
-        mixer.simulate()
-        liq.copy_like(mixer.outs[0])
         
+        # Mix liquid streams
+        liq = mixer.outs[0]
+        liq.P = self.ins[0].P
+        liq.mix_from(mixer.ins, conserve_phases=True)
         if self.flash:
             mixed_stream = MultiStream(None, thermo=self.thermo)
             mixed_stream.copy_flow(self.ins[0])
             mixed_stream.vle(P=last_evaporator.P, V=V_overall)
             out_wt_solids.mol = mixed_stream.imol['l']
-            liq.mol = mixed_stream.imol['g']
+            if liq.phase == 'l':
+                liq.phase = 'l'
+                liq.mol = mixed_stream.imol['g']
+            else:
+                H = liq.H
+                liq.copy_like(mixed_stream['g'])
+                liq.vle(H=H, P=self.ins[0].P)
         liq.P = out_wt_solids.P
         
     def _design(self):
@@ -369,16 +435,17 @@ class MultiEffectEvaporator(Unit):
         CE = bst.CE
         
         first_evaporator = evaporators[0]
-        first_evaporator.simulate(run=False)
-        hx = first_evaporator.heat_exchanger
-        self.heat_utilities.append(hx.heat_utilities[0])
+        if self.flash:
+            duty = first_evaporator.H_out - first_evaporator.H_in
+        else:
+            duty = first_evaporator.design_results['Heat transfer']
         
         # Cost first evaporators
-        duty = hx.total_heat_transfer
         Q = abs(duty)
         Tci = first_evaporator.ins[0].T
         Tco = first_evaporator.outs[0].T
-        hu = first_evaporator.heat_utilities[0]
+        hu = self.create_heat_utility()
+        hu(duty, Tci, Tco)
         Th = hu.inlet_utility_stream.T
         LMTD = ht.compute_LMTD(Th, Th, Tci, Tco)
         ft = 1
@@ -408,12 +475,16 @@ class MultiEffectEvaporator(Unit):
                 evap_costs.append(C_func(A, CE))
         self._As = As
         Design['Area'] = A = sum(As)
-        vapor_sep_design = first_evaporator.design_results
-        L = vapor_sep_design['Length']
-        D = vapor_sep_design['Diameter']
-        R = D / 2.
-        volume = 0.0283168466 * np.pi * L * R * R # m3
-        Design['Volume'] = total_volume = self._N_evap * volume
+        total_volume = 0
+        for evap in evaporators:
+            if evap.outs[0].isempty(): continue
+            evap._size_flash_vessel()
+            vapor_sep_design = evap.design_results
+            L = vapor_sep_design['Length']
+            D = vapor_sep_design['Diameter']
+            R = D / 2.
+            total_volume += 0.0283168466 * np.pi * L * R * R # m3
+        Design['Volume'] = total_volume
         Cost['Evaporators'] = sum(evap_costs)
         
         self.vacuum_system = bst.VacuumSystem(

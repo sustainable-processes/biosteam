@@ -130,12 +130,12 @@ class AdsorptionColumnTSA(PressureVessel, Splitter):
     >>> A1.simulate()
     >>> A1.results(with_units=False)
     Low pressure steam   Duty                                                    1.68e+03
-                         Flow                                                      0.0433
-                         Cost                                                      0.0103
+                         Flow                                                      0.0436
+                         Cost                                                      0.0104
     Design               Number of reactors                                             3
                          Vessel type                                             Vertical
                          Length                                                      52.1
-                         Diameter                                                    1.67
+                         Diameter                                                    1.68
                          Weight                                                   2.9e+03
                          Wall thickness                                              0.25
                          Vessel material                              Stainless steel 316
@@ -144,7 +144,7 @@ class AdsorptionColumnTSA(PressureVessel, Splitter):
                          Silica gel                                              7.23e+04
                          Heat exchanger regeneration - Double pipe                    117
     Total purchase cost                                                          2.49e+05
-    Utility cost                                                                   0.0103
+    Utility cost                                                                   0.0104
     Name: A1, dtype: object
     
     References
@@ -180,8 +180,8 @@ class AdsorptionColumnTSA(PressureVessel, Splitter):
     _N_ins = 3
     _N_outs = 3
     
-    def __init__(self, 
-            ID='', ins=None, outs=(), thermo=None, *,
+    def _init(self, 
+            adsorbate_ID, split,
             superficial_velocity=7.2, # m / hr; typical velocities are 4 to 14.4 m /hr for liquids; Adsorption basics Alan Gabelman (2017) Adsorption basics Part 1. AICHE
             regeneration_velocity=1332, # Mid point in velocity range for gasses, m / hr; Alan Gabelman (2017) Adsorption basics Part 1. AICHE
             cycle_time=3, # 1-2 hours required for thermal-swing-adsorption (TSA) for silica gels (add 1 hr for conservativeness); Seader, J. D., Separation Process Principles: Chemical and Biochemical Operations,” 3rd ed., Wiley, Hoboken, NJ (2011).
@@ -201,12 +201,10 @@ class AdsorptionColumnTSA(PressureVessel, Splitter):
             target_recovery=None,
             K=None,
             converge_adsorption_recovery=False,
-            adsorbate_ID, 
             order=None, 
             wet_retention=0.01,
-            split,
         ):
-        bst.Splitter.__init__(self, ID, ins, outs, thermo, order=order, split=split)
+        bst.Splitter._init(self, order=order, split=split)
         self.superficial_velocity = superficial_velocity
         self.cycle_time = cycle_time
         self.adsorbent_capacity = adsorbent_capacity
@@ -228,8 +226,8 @@ class AdsorptionColumnTSA(PressureVessel, Splitter):
         self.K = K
         self.rho_adsorbent_solid = rho_adsorbent_solid
         self.rho_adsorbent = rho_adsorbent if rho_adsorbent else rho_adsorbent_solid * (1-void_fraction)
-        self.heat_exchanger_regeneration = bst.HXutility(None, None, None, thermo=thermo)
-        self.heat_exchanger_drying = bst.HXutility(None, None, None, thermo=thermo)
+        self.heat_exchanger_regeneration = bst.HXutility(None, None, None, thermo=self.thermo)
+        self.heat_exchanger_drying = bst.HXutility(None, None, None, thermo=self.thermo)
         
     @property
     def effluent(self):

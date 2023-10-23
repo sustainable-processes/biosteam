@@ -70,22 +70,17 @@ class UnitGroup:
     
     >>> ugroup.autofill_metrics(electricity_production=True)
     >>> ugroup.metrics
-    [<Metric: Installed equipment cost (MM$)>,
-     <Metric: Cooling duty (GJ/hr)>,
-     <Metric: Heating duty (GJ/hr)>,
-     <Metric: Electricity consumption (MW)>,
-     <Metric: Electricity production (MW)>,
-     <Metric: Material cost (USD/hr)>]
+    [<Metric: Installed equipment cost (MM$)>, <Metric: Cooling duty (GJ/hr)>, <Metric: Heating duty (GJ/hr)>, <Metric: Electricity consumption (MW)>, <Metric: Electricity production (MW)>, <Metric: Material cost (USD/hr)>]
     
     Get all metric results:
         
     >>> ugroup.to_dict()
-    {'Installed equipment cost [MM$]': 0.056, 'Cooling duty [GJ/hr]': 0.37, 'Heating duty [GJ/hr]': 0.0, 'Electricity consumption [MW]': 0.00082, 'Electricity production [MW]': 0.0, 'Material cost [USD/hr]': 0.0}
+    {'Installed equipment cost [MM$]': 0.05, 'Cooling duty [GJ/hr]': 0.37, 'Heating duty [GJ/hr]': 0.0, 'Electricity consumption [MW]': 0.0, 'Electricity production [MW]': 0.0, 'Material cost [USD/hr]': 0.0}
     
     Each result can be retrieved separately:
     
     >>> ugroup.get_installed_cost()
-    0.056
+    0.05
     
     >>> ugroup.get_cooling_duty()
     0.37
@@ -115,7 +110,7 @@ class UnitGroup:
               Sucrose flow rate [kg/hr]
     
     >>> ugroup.to_dict()
-    {'Installed equipment cost [MM$]': 0.056, 'Cooling duty [GJ/hr]': 0.37, 'Heating duty [GJ/hr]': 0.0, 'Electricity consumption [MW]': 0.00082, 'Electricity production [MW]': 0.0, 'Material cost [USD/hr]': 0.0, 'Moisture content': 0.63, 'Sucrose flow rate [kg/hr]': 1026.88}
+    {'Installed equipment cost [MM$]': 0.05, 'Cooling duty [GJ/hr]': 0.37, 'Heating duty [GJ/hr]': 0.0, 'Electricity consumption [MW]': 0.0, 'Electricity production [MW]': 0.0, 'Material cost [USD/hr]': 0.0, 'Moisture content': 0.63, 'Sucrose flow rate [kg/hr]': 1026.8}
     
     """
     __slots__ = ('name', 'units', 'metrics', 'filter_savings', 'extend_feed_ends')
@@ -310,7 +305,7 @@ class UnitGroup:
         >>> areas = UnitGroup.group_by_area(cornstover_sys.units)
         >>> areas[-1].show()
         UnitGroup: 700
-         units: T701, P701, T702, P702, M701,
+         units: T701, P701, M701, T702, P702,
                 T703
         
         >>> default() # Bring biosteam settings back to default
@@ -477,9 +472,10 @@ class UnitGroup:
         ... )
              Net electricity production
         0                           100
-        100                       -2.92
-        200                       -3.55
-        300                      -0.809
+        100                       -2.97
+        200                        -3.5
+        300                      -0.895
+        400                           0
         
         >>> bst.UnitGroup.df_from_groups(
         ...     unit_groups, fraction=True,
@@ -487,9 +483,10 @@ class UnitGroup:
         ... )
              Net electricity production
         0                           108
-        100                       -3.14
-        200                       -3.83
-        300                      -0.873
+        100                       -3.21
+        200                       -3.78
+        300                      -0.966
+        400                           0
         
         >>> bst.default() # Reset to biosteam defaults
         

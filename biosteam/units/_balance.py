@@ -94,20 +94,20 @@ class MassBalance(Unit):
     >>> sys.simulate();
     >>> target.show()
     Stream: target
-     phase: 'l', T: 298.15 K, P: 101325 Pa
-     flow (kmol/hr): Water    500
-                     Ethanol  500
+    phase: 'l', T: 298.15 K, P: 101325 Pa
+    flow (kmol/hr): Water    500
+                    Ethanol  500
     
     """
     _graphics = process_specification_graphics
     _N_ins = _N_outs = 1
 
-    def __init__(self, ID='', ins=None, outs=(), thermo=None,
-                 chemical_IDs=None, variable_inlets=(),
-                 constant_outlets=(), constant_inlets=(),
-                 is_exact=True, balance='flow',
-                 description=""):
-        Unit.__init__(self, ID, ins, outs, thermo)
+    def _init(self, 
+            chemical_IDs=None, variable_inlets=(),
+            constant_outlets=(), constant_inlets=(),
+            is_exact=True, balance='flow',
+            description=""
+        ):
         self.variable_inlets = variable_inlets
         self.constant_inlets = constant_inlets
         self.constant_outlets = constant_outlets

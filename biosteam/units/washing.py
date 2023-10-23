@@ -1,4 +1,4 @@
-from .. import Unit
+from biosteam import Unit
 import biosteam as bst
 from .decorators import cost
 

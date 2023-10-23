@@ -26,6 +26,7 @@ __all__ = ('UnitGraphics',
            'system_unit',
            'stream_unit',
            'junction_graphics',
+           'scaler_graphics',
            'compressor_graphics',
            'turbine_graphics',
            'valve_graphics')
@@ -85,7 +86,8 @@ class UnitGraphics:
     def get_minimal_node(self, unit):
         """Return minmal node (a single dot)."""
         minode = dict(
-            name = unit.ID,
+            name = str(hash(unit.ID)),
+            label = unit.ID,
             width = '0.1',
             shape = 'oval',
             style = 'filled',
@@ -97,7 +99,22 @@ class UnitGraphics:
     def get_node_tailored_to_unit(self, unit): # pragma: no coverage
         """Return node tailored to unit specifications"""
         node = self.node.copy()
-        node['name'] = '\n'.join([unit.ID, unit.line]) if unit.line else unit.ID
+        if getattr(unit, '_owner', None):
+            owner = unit._owner
+            ID = unit.ID
+            sID, *_ = ID.split('[')
+            if sID in owner.parallel:
+                N = owner.parallel[sID]
+            elif 'self' in owner.parallel:
+                N = owner.parallel['self']
+            else:
+                N = None
+            label = '\n'.join([bst.utils.format_title(i) for i in ID.split('.')])
+            label = f"{owner.ID}\n{label}\nAuxiliary"
+            if N is not None and N > 1: label = f"{label}\n1 of {N}"
+            node['label'] = label
+        else:
+            node['label'] = '\n'.join([unit.ID, unit.line]) if unit.line else unit.ID
         tailor_node_to_unit = self.tailor_node_to_unit
         if 'fillcolor' not in node:
             node['fillcolor'] = bst.preferences.unit_color
@@ -107,6 +124,7 @@ class UnitGraphics:
             node['color'] = bst.preferences.unit_periphery_color
         if tailor_node_to_unit:
             tailor_node_to_unit(node, unit)
+        node['name'] = str(hash(unit))
         return node
         
     def __repr__(self): # pragma: no coverage
@@ -121,7 +139,7 @@ multi_edge_in = 20 * single_edge_in
 multi_edge_out = 20 * single_edge_out
 right_edge_out = ({'tailport': 'e'},)
 left_edge_in = ({'headport': 'w'},)
-top_bottom_edge_out = ({'tailport': 'n'}, {'tailport': 's'})
+top_bottom_edge_out = ({'tailport': 'n'}, {'tailport': 's'}, {'tailport': 'c'})
 
 box_node = {'shape': 'box',
             'style': 'filled',
@@ -193,7 +211,8 @@ def tailor_utility_heat_exchanger_node(node, unit): # pragma: no coverage
             line = 'Heat exchanger'
     except:
         line = 'Heat exchanger'
-    node['name'] = unit.ID + "\n" + line
+    if unit.owner is unit:
+        node['label'] = '\n'.join([unit.ID, line])
 
 utility_heat_exchanger_graphics = UnitGraphics(single_edge_in, single_edge_out, node,
                                                tailor_utility_heat_exchanger_node)
@@ -205,7 +224,6 @@ node['margin'] = '0'
 node['gradientangle'] = '90'
 node['fillcolor'] = '#60c1cf:#ed5a6a'
 def tailor_process_heat_exchanger_node(node, unit): # pragma: no coverage
-    node['name'] = unit.ID + "\nHeat exchanger"
     node['fontcolor'] = 'white'
     node['color'] = 'none'
 
@@ -219,9 +237,9 @@ node['color'] = '#de7e55'
 node['fontcolor'] = 'white'
 node['shape'] = 'note'
 node['margin'] = '0.2'
-def tailor_process_specification_node(node, unit): # pragma: no coverage
-    node['name'] = (f"{unit.ID} - {unit.description}\n"
-                    f"{unit.line}")
+def tailor_process_specification_node(node, unit): # pragma: no coverage    
+    node['label'] = (f"{unit.ID} - {unit.description}\n"
+                     f"{unit.line}")
 
 process_specification_graphics = UnitGraphics(single_edge_in, single_edge_out, node,
                                               tailor_process_specification_node)
@@ -254,16 +272,26 @@ def tailor_junction_node(node, unit): # pragma: no coverage
 junction_graphics = UnitGraphics(single_edge_in, single_edge_out, node,
                                  tailor_junction_node)
 
+
+node = box_node.copy()
+def tailor_scalar_node(node, unit): # pragma: no coverage
+    node['label'] = f"x{unit.scale}"
+    node['width'] = '0.1'
+    node['shape'] = 'oval'
+    node['style'] = 'filled'
+    node['fillcolor'] = bst.preferences.unit_color
+    node['fontcolor'] = bst.preferences.unit_label_color
+    
+scaler_graphics = UnitGraphics(single_edge_in, single_edge_out, node,
+                               tailor_scalar_node)
+
 # Compressor graphics
 node = box_node.copy()
 node['shape'] = 'trapezium'
 node['orientation'] = '270'
 node['height'] = '1.5'
 node['margin'] = '0'
-def tailor_compressor_node(node, unit): # pragma: no coverage
-    node['name'] = unit.ID + "\nCompressor"
-compressor_graphics = UnitGraphics(single_edge_in, single_edge_out, node, tailor_compressor_node)
-
+compressor_graphics = UnitGraphics(single_edge_in, single_edge_out, node)
 
 # Turbine graphics
 node = box_node.copy()
@@ -271,10 +299,7 @@ node['shape'] = 'trapezium'
 node['orientation'] = '90'
 node['height'] = '1.5'
 node['margin'] = '0'
-def tailor_turbine_node(node, unit): # pragma: no coverage
-    node['name'] = unit.ID + "\nTurbine"
-turbine_graphics = UnitGraphics(single_edge_in, single_edge_out, node, tailor_turbine_node)
-
+turbine_graphics = UnitGraphics(single_edge_in, single_edge_out, node)
 
 # Valve graphics
 node = box_node.copy()
@@ -287,9 +312,8 @@ def tailor_valve_node(node, unit): # pragma: no coverage
         node['fillcolor'] = bst.preferences.unit_color
         node['fontcolor'] = bst.preferences.unit_label_color
         node['color'] = bst.preferences.unit_periphery_color
-        node['name'] = unit.ID + "\nValve"
     else:
-        node['name'] = ''
+        node['label'] = ''
         if bst.preferences.unit_color == "#555f69":
             filename = "graphics/valve_dark.png"
         elif bst.preferences.unit_color == "white:#CDCDCD":

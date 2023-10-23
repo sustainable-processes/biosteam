@@ -1,5 +1,6 @@
-sphinx>=4.2.0
-pydata_sphinx_theme==0.11.0
+sphinx>=7.2.6
+pydata_sphinx_theme==0.14.1
+sphinxcontrib-jquery
 sphinx_multitoc_numbering
 sphinx_autodoc_typehints
 # biorefineries
@@ -7,4 +8,5 @@ sphinx_design
 pyyaml
 ipykernel
 nbsphinx
+nbsphinx-link
 myst_parser

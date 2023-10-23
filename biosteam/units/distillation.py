@@ -42,8 +42,8 @@ from .design_tools.specification_factors import  (
     tray_material_factor_functions,
     distillation_tray_type_factor,
     material_densities_lb_per_in3)
-from .design_tools import column_design as design
-from .design_tools.vacuum import compute_vacuum_system_power_and_cost
+from . import design_tools as design
+from thermosteam import separations
 from .. import Unit
 from .splitting import FakeSplitter
 from .._graphics import vertical_column_graphics
@@ -52,8 +52,105 @@ from warnings import warn
 from thermosteam import separations as sep
 import biosteam as bst
 from .heat_exchange import HXutility
+from ._flash import Flash
 
 __all__ = ('Distillation', 'BinaryDistillation', 'ShortcutColumn')
+
+# %% Distillation-specific auxliary units
+
+class RefluxDrum(design.PressureVessel, Unit):
+    """
+    Create a reflux drum for surge capacity and separation of entrained phases
+    after the condenser of a distillation coumn.
+    
+    Parameters
+    ----------
+    ins : 
+        Inlet fluid.
+    outs : 
+        * [0] Vapor product
+        * [1] Liquid product
+    vessel_material : str, optional
+        Vessel construction material. Defaults to 'Carbon steel'.
+    has_glycol_groups=False : bool
+        True if glycol groups are present in the mixture.
+    has_amine_groups=False : bool
+        True if amine groups are present in the mixture.
+    vessel_type=None : 'Horizontal' or 'Vertical', optional
+        Vessel separation type. If not specified, the vessel type will be chosen
+        according to heuristics.
+    holdup_time : float, optional
+        Time it takes to raise liquid to half full [min]. Defaults to 3 min.
+    surge_time : float, optional
+        Time it takes to reach from normal to maximum liquied level [min]. 
+        Defaults to 2 min.
+    has_mist_eliminator : bool
+        True if using a mist eliminator pad.
+        
+    """
+    _N_outs = 2
+    _design_parameters = Flash._design_parameters
+    _vertical_vessel_pressure_diameter_and_length = Flash._vertical_vessel_pressure_diameter_and_length
+    _horizontal_vessel_pressure_diameter_and_length = Flash._horizontal_vessel_pressure_diameter_and_length
+    _default_vessel_type = Flash._default_vessel_type
+    vapor  = Flash.vapor
+    liquid  = Flash.liquid
+    
+    def _init(self, 
+             vessel_material='Carbon steel',
+             has_glycol_groups=False,
+             has_amine_groups=False,
+             vessel_type=None,
+             holdup_time=3,
+             surge_time=2,
+             has_mist_eliminator=False
+        ):
+        #: [str] Vessel construction material
+        self.vessel_material = vessel_material
+        
+        #: [bool] True if glycol groups are present in the mixture
+        self.has_glycol_groups = has_glycol_groups
+        
+        #: [bool] True if amine groups are present in the mixture
+        self.has_amine_groups = has_amine_groups
+        
+        #: [str] 'Horizontal', 'Vertical', or 'Default'
+        self.vessel_type = vessel_type
+        
+        #: [float] Time it takes to raise liquid to half full (min)
+        self.holdup_time = holdup_time
+        
+        #: [float] Time it takes to reach from normal to maximum liquied level (min)
+        self.surge_time = surge_time
+        
+        #: [bool] True if using a mist eliminator pad
+        self.has_mist_eliminator = has_mist_eliminator
+        
+    def _run(self):
+        separations.phase_split(*self.ins, self.outs)
+        
+    def _design(self):
+        vap, liq = self.outs
+        self.no_vessel_needed = vap.isempty() or liq.isempty()
+        if self.no_vessel_needed:
+            self.design_results.clear()
+        else:
+            vessel_type = self.vessel_type
+            if vessel_type == 'Vertical': 
+                args = self._vertical_vessel_pressure_diameter_and_length()
+            elif vessel_type == 'Horizontal': 
+                args = self._horizontal_vessel_pressure_diameter_and_length()
+            else: raise RuntimeError('unknown vessel type') # pragma: no cover
+            self.design_results.update(
+                self._vessel_design(*args)
+            )
+        
+    def _cost(self):
+        D = self.design_results
+        if not self.no_vessel_needed:
+            self.baseline_purchase_costs.update(
+                self._vessel_purchase_cost(D['Weight'], D['Diameter'], D['Length'])
+        )
 
 # %% Abstract distillation column unit operation
 
@@ -119,7 +216,20 @@ class Distillation(Unit, isabstract=True):
 
     """
     line = 'Distillation'
-    auxiliary_unit_names = ('condenser', 'boiler', 'vacuum_system')
+    auxiliary_unit_names = (
+        'condenser', 'reflux_drum', 'top_split',
+        'pump', 'reboiler', 'bottoms_split',
+        'vacuum_system'
+    )
+    _auxin_index = {
+        'reflux_drum': 0,
+        'top_split': 0,
+        'reboiler': 1,
+    }
+    _auxout_index = {
+        'condenser': 0,
+        'bottoms_split': 1,
+    }
     _graphics = vertical_column_graphics
     _ins_size_is_fixed = False
     _N_ins = 1
@@ -171,30 +281,30 @@ class Distillation(Unit, isabstract=True):
                'Height': (27., 170.),
                'Weight': (9000., 2.5e6)}
     
-    def __init__(self, ID='', ins=None, outs=(), thermo=None,
-                P=101325, *, LHK, k,
-                Rmin=0.3,
-                Lr=None,
-                Hr=None,
-                y_top=None,
-                x_bot=None, 
-                product_specification_format=None,
-                vessel_material='Carbon steel',
-                tray_material='Carbon steel',
-                tray_type='Sieve',
-                tray_spacing=450,
-                stage_efficiency=None,
-                velocity_fraction=0.8,
-                foaming_factor=1.0,
-                open_tray_area_fraction=0.1,
-                downcomer_area_fraction=None,
-                is_divided=False,
-                vacuum_system_preference='Liquid-ring pump',
-                condenser_thermo=None,
-                boiler_thermo=None,
-                partial_condenser=True,
+    def _init(self, 
+            LHK, k,
+            P=101325, 
+            Rmin=0.01,
+            Lr=None,
+            Hr=None,
+            y_top=None,
+            x_bot=None, 
+            product_specification_format=None,
+            vessel_material='Carbon steel',
+            tray_material='Carbon steel',
+            tray_type='Sieve',
+            tray_spacing=450,
+            stage_efficiency=None,
+            velocity_fraction=0.8,
+            foaming_factor=1.0,
+            open_tray_area_fraction=0.1,
+            downcomer_area_fraction=None,
+            is_divided=False,
+            vacuum_system_preference='Liquid-ring pump',
+            condenser_thermo=None,
+            reboiler_thermo=None,
+            partial_condenser=True,
         ):
-        Unit.__init__(self, ID, ins, outs, thermo)
         self.check_LHK = True
         
         # Operation specifications
@@ -217,13 +327,13 @@ class Distillation(Unit, isabstract=True):
         self.downcomer_area_fraction = downcomer_area_fraction
         self.is_divided = is_divided
         self.vacuum_system_preference = vacuum_system_preference
-        self._load_components(partial_condenser, condenser_thermo, boiler_thermo, LHK)
+        self._load_components(partial_condenser, condenser_thermo, reboiler_thermo, LHK)
         
     def _reset_thermo(self, thermo):
         super()._reset_thermo(thermo)
         self.LHK = self._LHK
         
-    def _load_components(self, partial_condenser, condenser_thermo, boiler_thermo, LHK):
+    def _load_components(self, partial_condenser, condenser_thermo, reboiler_thermo, LHK):
         # Setup components
         thermo = self.thermo
         
@@ -233,36 +343,52 @@ class Distillation(Unit, isabstract=True):
         #: [HXutility] Condenser.
         if not condenser_thermo: condenser_thermo = thermo
         if partial_condenser:
-            self.condenser = HXutility(None,
-                                       ins=tmo.Stream(None, phase='g', thermo=condenser_thermo),
-                                       outs=tmo.MultiStream(None, thermo=condenser_thermo),
-                                       thermo=condenser_thermo)
-            self.condensate = self.condenser.outs[0]['l']
-            self.distillate = self.condenser.outs[0]['g']
+            self.auxiliary(
+                'condenser', HXutility,
+                ins='vapor',
+                thermo=condenser_thermo
+            )
+            self.condenser.outlet.phases = ('g', 'l')
+            self.auxiliary(
+                'reflux_drum', RefluxDrum,
+                ins=self.condenser-0,
+                outs=(self-0, 'condensate')
+            )
+            self.condensate =  self.reflux_drum-1
         else:
-            self.condenser = HXutility(None,
-                                       ins=tmo.Stream(None, phase='g', thermo=condenser_thermo),
-                                       outs=tmo.Stream(None, thermo=condenser_thermo),
-                                       thermo=condenser_thermo)
-            self.splitter = FakeSplitter(None,
-                                         ins = self.condenser-0,
-                                         outs=[tmo.Stream(None, thermo=condenser_thermo),
-                                               tmo.Stream(None, thermo=condenser_thermo)],
-                                         thermo=self.thermo)
-            self.distillate = self.splitter-0
-            self.condensate = self.splitter-1
-        
-        #: [HXutility] Boiler.
-        if not boiler_thermo: boiler_thermo = thermo
-        self.boiler = HXutility(None,
-                                ins=tmo.Stream(None, thermo=boiler_thermo),
-                                outs=tmo.MultiStream(None, thermo=boiler_thermo),
-                                thermo=boiler_thermo)
-        self.boiler._ID = 'Boiler'
-        self.condenser._ID = 'Condenser'
-        self.boilup = self.boiler.outs[0]['g']  
+            self.auxiliary(
+                'condenser', HXutility,
+                ins='vapor',
+                thermo=condenser_thermo
+            )
+            self.auxiliary(
+                'top_split', FakeSplitter,
+                ins = self.condenser-0,
+                outs=(self-0, 'condensate'),
+                thermo=condenser_thermo
+            )
+            self.condensate = self.top_split-1
+        self.condenser.inlet.phase = 'g'
+        if not reboiler_thermo: reboiler_thermo = thermo
+        self.auxiliary('pump', bst.Pump,
+            'liquid', thermo=reboiler_thermo,
+        )
+        self.auxiliary('reboiler', HXutility,
+            self.pump-0, thermo=reboiler_thermo
+        )
+        self.reboiler.outs[0].phases = ('g', 'l')
+        self.auxiliary('bottoms_split', bst.PhaseSplitter,
+            self.reboiler-0, ('boilup', self-1), thermo=reboiler_thermo,
+        )
         self.LHK = LHK
         self.reset_cache() # Abstract method
+    
+    @property
+    def distillate(self):
+        return self.outs[0]
+    @property
+    def bottoms_product(self):
+        return self.outs[1]
     
     @property
     def product_specification_format(self):
@@ -591,7 +717,7 @@ class Distillation(Unit, isabstract=True):
     def _update_distillate_and_bottoms_temperature(self):
         distillate, bottoms_product = self.outs
         condenser_distillate = self.distillate
-        reboiler_bottoms_product = self.boiler.outs[0]['l']
+        reboiler_bottoms_product = self.reboiler.outs[0]['l']
         condenser_distillate.copy_like(distillate)
         reboiler_bottoms_product.copy_like(bottoms_product)
         self._boilup_bubble_point = bp = reboiler_bottoms_product.bubble_point_at_P()
@@ -603,10 +729,20 @@ class Distillation(Unit, isabstract=True):
         self.condenser.T = self.condensate.T = condenser_distillate.T = distillate.T = p.T
         self.condenser.P = self.condensate.P = condenser_distillate.P = distillate.P = p.P
             
+        # distillate, bottoms_product = self.outs
+        # self._boilup_bubble_point = bp = bottoms_product.bubble_point_at_P()
+        # bottoms_product.T = bp.T
+        # if self._partial_condenser: 
+        #     self._condenser_operation = p = distillate.dew_point_at_P()
+        # else:
+        #     self._condenser_operation = p = distillate.bubble_point_at_P()
+        # self.condenser.T = self.condensate.T = distillate.T = p.T
+        # self.condenser.P = self.condensate.P = distillate.P = p.P
+        
     def _setup(self):
         super()._setup()
         distillate, bottoms_product = self.outs
-        self.boiler.ins[0].P = self.condenser.ins[0].P = self.condenser.outs[0].P = self.mixed_feed.P = distillate.P = bottoms_product.P = self.P
+        self.reboiler.ins[0].P = self.condenser.ins[0].P = self.condenser.outs[0].P = self.mixed_feed.P = distillate.P = bottoms_product.P = self.P
         distillate.phase = 'g' if self._partial_condenser else 'l'
         bottoms_product.phase = 'l'
 
@@ -628,13 +764,12 @@ class Distillation(Unit, isabstract=True):
         feed.set_data(data)
         return q
 
-    def _run_condenser_and_boiler(self):
+    def _run_condenser_and_reboiler(self):
         feed = self.mixed_feed
         distillate, bottoms_product = self.outs
         condenser = self.condenser
-        boiler = self.boiler
+        reboiler = self.reboiler
         R = self.design_results['Reflux']
-        
         # Set condenser conditions
         self.distillate.mol[:] = distillate.mol
         self.F_Mol_distillate = F_mol_distillate = distillate.F_mol
@@ -645,49 +780,57 @@ class Distillation(Unit, isabstract=True):
         condensate.imol[p.IDs] = p.x * F_mol_condensate
         condensate.T = p.T
         condensate.P = p.P
+        condenser.outs[0].mix_from([condensate, distillate], conserve_phases=True)
         vap = condenser.ins[0]
         vap.mol = distillate.mol + condensate.mol
-        vap_T = vap.dew_point_at_P().T
-        if vap_T < p.T: vap_T = p.T + 0.1
-        vap.T = vap_T
+        T_vap = vap.dew_point_at_P().T
+        if T_vap < p.T: T_vap = p.T + 0.1
+        vap.T = T_vap
         vap.P = distillate.P
-        if not self._partial_condenser: self.splitter.ins[0].mix_from(self.splitter.outs)
+        if not self._partial_condenser: self.top_split.ins[0].mix_from(self.top_split.outs)
         
-        # Set boiler conditions
-        boiler.outs[0]['l'].copy_flow(bottoms_product)
+        # Set reboiler conditions
+        reboiler.outs[0]['l'].copy_flow(bottoms_product)
         F_vap_feed = feed.imol['g'].sum()
         self.F_Mol_boilup = F_mol_boilup = (R+1)*F_mol_distillate - F_vap_feed
         bp = self._boilup_bubble_point
         boilup_flow = bp.y * F_mol_boilup
-        boilup = self.boilup
+        boilup = reboiler.outs[0]['g']
         boilup.T = bp.T
         boilup.P = bp.P
         boilup.imol[bp.IDs] = boilup_flow
-        liq = boiler.ins[0]
-        liq.phase = 'l'
+        liq = reboiler.ins[0]
         liq.mix_from([bottoms_product, boilup], energy_balance=False)
+        liq.phase = 'l'
         liq_T = liq.bubble_point_at_P().T
         if liq_T > bp.T: liq_T = bp.T - 0.1
         liq.T = liq_T
+        self.pump.ins[0].copy_like(liq)
+        self.pump.simulate()
+        self.bottoms_split.simulate()
+        if self._partial_condenser:
+            self.reflux_drum.simulate()
+        else:
+            self.top_split.simulate()
     
     def _simulate_components(self): 
-        boiler = self.boiler
+        reboiler = self.reboiler
         condenser = self.condenser
         Q_condenser = condenser.outs[0].H - condenser.ins[0].H
         H_out = self.H_out
         H_in = self.H_in
         Q_overall_boiler =  H_out - H_in - Q_condenser
-        Q_boiler = boiler.outs[0].H - boiler.ins[0].H
+        Q_boiler = reboiler.outs[0].H - reboiler.ins[0].H
         if Q_boiler < Q_overall_boiler:
-            liquid = boiler.ins[0]
-            H_out_boiler = boiler.outs[0].H
+            liquid = reboiler.ins[0]
+            H_out_boiler = reboiler.outs[0].H
             liquid.H = H_out_boiler - Q_overall_boiler
             boiler_kwargs = dict(duty=Q_overall_boiler)
             condenser_kwargs = dict(duty=Q_condenser)
         else:
             boiler_kwargs = dict(duty=Q_boiler)
             condenser_kwargs = dict(duty=Q_condenser)
-        boiler.simulate(
+        reboiler.simulate(
             run=False,
             design_kwargs=boiler_kwargs,
         )
@@ -764,7 +907,7 @@ class Distillation(Unit, isabstract=True):
         
         ### Get diameter of stripping section based on feed plate ###
         rho_L = bottoms_product.rho
-        boilup = self.boilup
+        boilup = self.reboiler.outs[0]['g']
         V = boilup.F_mass
         V_vol = boilup.get_total_flow('m^3/s')
         rho_V = boilup.rho
@@ -1007,55 +1150,106 @@ class BinaryDistillation(Distillation, new_graphics=False):
     BinaryDistillation: D1
     ins...
     [0] feed
-        phase: 'l', T: 76.12 degC, P: 1 atm
+        phase: 'l', T: 76.082 degC, P: 1 atm
         composition (%): Water     39
                          Methanol  48.8
                          Glycerol  12.2
                          --------  205 kmol/hr
     outs...
     [0] distillate
-        phase: 'g', T: 64.909 degC, P: 1 atm
+        phase: 'g', T: 64.854 degC, P: 1 atm
         composition (%): Water     1
                          Methanol  99
                          --------  100 kmol/hr
     [1] bottoms_product
-        phase: 'l', T: 100.03 degC, P: 1 atm
+        phase: 'l', T: 100.02 degC, P: 1 atm
         composition (%): Water     75.4
                          Methanol  0.761
                          Glycerol  23.9
                          --------  105 kmol/hr
     >>> D1.results()
-    Divided Distillation Column                           Units        D1
-    Cooling water       Duty                              kJ/hr -4.88e+06
-                        Flow                            kmol/hr  3.33e+03
-                        Cost                             USD/hr      1.63
-    Low pressure steam  Duty                              kJ/hr  1.02e+07
-                        Flow                            kmol/hr       264
-                        Cost                             USD/hr      62.7
-    Design              Theoretical feed stage                          9
-                        Theoretical stages                             13
-                        Minimum reflux                    Ratio     0.689
-                        Reflux                            Ratio      1.38
-                        Rectifier stages                               15
-                        Stripper stages                                13
-                        Rectifier height                     ft      34.7
-                        Stripper height                      ft      31.7
-                        Rectifier diameter                   ft      3.95
-                        Stripper diameter                    ft      3.21
-                        Rectifier wall thickness             in     0.312
-                        Stripper wall thickness              in     0.312
-                        Rectifier weight                     lb  6.04e+03
-                        Stripper weight                      lb  4.45e+03
-    Purchase cost       Rectifier trays                     USD   1.5e+04
-                        Stripper trays                      USD  1.25e+04
-                        Rectifier tower                     USD  4.58e+04
-                        Stripper platform and ladders       USD   1.4e+04
-                        Stripper tower                      USD  3.84e+04
-                        Rectifier platform and ladders      USD  1.14e+04
-                        Condenser - Floating head           USD  3.33e+04
-                        Boiler - Floating head              USD  2.71e+04
-    Total purchase cost                                     USD  1.98e+05
-    Utility cost                                         USD/hr      64.3
+    Divided Distillation Column                                Units        D1
+    Electricity         Power                                     kW     0.644
+                        Cost                                  USD/hr    0.0504
+    Cooling water       Duty                                   kJ/hr -4.88e+06
+                        Flow                                 kmol/hr  3.33e+03
+                        Cost                                  USD/hr      1.63
+    Low pressure steam  Duty                                   kJ/hr  1.02e+07
+                        Flow                                 kmol/hr       263
+                        Cost                                  USD/hr      62.6
+    Design              Theoretical feed stage                               9
+                        Theoretical stages                                  13
+                        Minimum reflux                         Ratio     0.687
+                        Reflux                                 Ratio      1.37
+                        Rectifier stages                                    15
+                        Stripper stages                                     13
+                        Rectifier height                          ft      34.7
+                        Stripper height                           ft      31.7
+                        Rectifier diameter                        ft      3.93
+                        Stripper diameter                         ft      3.19
+                        Rectifier wall thickness                  in     0.312
+                        Stripper wall thickness                   in     0.312
+                        Rectifier weight                          lb     6e+03
+                        Stripper weight                           lb  4.43e+03
+    Purchase cost       Rectifier trays                          USD   1.5e+04
+                        Stripper trays                           USD  1.25e+04
+                        Rectifier tower                          USD  4.56e+04
+                        Stripper platform and ladders            USD  1.39e+04
+                        Stripper tower                           USD  3.83e+04
+                        Rectifier platform and ladders           USD  1.14e+04
+                        Condenser - Floating head                USD  3.33e+04
+                        Reflux drum - Horizontal pressur...      USD  1.02e+04
+                        Reflux drum - Platform and ladders       USD  3.02e+03
+                        Pump - Pump                              USD  4.37e+03
+                        Pump - Motor                             USD       368
+                        Reboiler - Floating head                 USD  2.71e+04
+    Total purchase cost                                          USD  2.15e+05
+    Utility cost                                              USD/hr      64.3
+    
+    Binary distillation with full-condenser
+    
+    >>> from biosteam.units import BinaryDistillation
+    >>> from biosteam import Stream, settings
+    >>> settings.set_thermo(['Water', 'Methanol', 'Glycerol'], cache=True)
+    >>> feed = Stream('feed', flow=(80, 100, 25))
+    >>> bp = feed.bubble_point_at_P()
+    >>> feed.T = bp.T # Feed at bubble point T
+    >>> D1 = BinaryDistillation('D1', ins=feed,
+    ...                         outs=('distillate', 'bottoms_product'),
+    ...                         LHK=('Methanol', 'Water'),
+    ...                         y_top=0.99, x_bot=0.01, k=2,
+    ...                         partial_condenser=False,
+    ...                         is_divided=False)
+    >>> D1.simulate()
+    >>> # See all results
+    >>> D1.results() # doctest: +SKIP
+    Distillation Column                              Units        D1
+    Electricity         Power                           kW      2.48
+                        Cost                        USD/hr     0.194
+    Cooling water       Duty                         kJ/hr -8.41e+06
+                        Flow                       kmol/hr  5.74e+03
+                        Cost                        USD/hr       2.8
+    Low pressure steam  Duty                         kJ/hr  1.02e+07
+                        Flow                       kmol/hr       263
+                        Cost                        USD/hr      62.6
+    Design              Theoretical feed stage                     9
+                        Theoretical stages                        13
+                        Minimum reflux               Ratio     0.687
+                        Reflux                       Ratio      1.37
+                        Actual stages                             28
+                        Height                          ft      52.4
+                        Diameter                        ft      3.97
+                        Wall thickness                  in     0.312
+                        Weight                          lb   8.9e+03
+    Purchase cost       Trays                          USD  2.28e+04
+                        Tower                          USD  5.76e+04
+                        Platform and ladders           USD  1.95e+04
+                        Condenser - Floating head      USD  4.35e+04
+                        Pump - Pump                    USD  4.32e+03
+                        Pump - Motor                   USD       441
+                        Reboiler - Floating head       USD  2.71e+04
+    Total purchase cost                                USD  1.75e+05
+    Utility cost                                    USD/hr      65.6
     
     """
     _cache_tolerance = np.array([50., 1e-5, 1e-6, 1e-6, 1e-2, 1e-6], float)
@@ -1175,7 +1369,7 @@ class BinaryDistillation(Distillation, new_graphics=False):
         
     def _design(self):
         self._run_McCabeThiele()
-        self._run_condenser_and_boiler()
+        self._run_condenser_and_reboiler()
         self._complete_distillation_column_design()
        
     def _plot_stages(self):
@@ -1413,55 +1607,61 @@ class ShortcutColumn(Distillation, new_graphics=False):
     ShortcutColumn: D1
     ins...
     [0] feed
-        phase: 'l', T: 76.12 degC, P: 1 atm
+        phase: 'l', T: 76.082 degC, P: 1 atm
         composition (%): Water     39
                          Methanol  48.8
                          Glycerol  12.2
                          --------  205 kmol/hr
     outs...
     [0] distillate
-        phase: 'g', T: 64.909 degC, P: 1 atm
+        phase: 'g', T: 64.854 degC, P: 1 atm
         composition (%): Water     1
                          Methanol  99
                          --------  100 kmol/hr
     [1] bottoms_product
-        phase: 'l', T: 100.03 degC, P: 1 atm
+        phase: 'l', T: 100.02 degC, P: 1 atm
         composition (%): Water     75.4
                          Methanol  0.761
                          Glycerol  23.9
                          --------  105 kmol/hr
     >>> D1.results()
-    Divided Distillation Column                           Units        D1
-    Cooling water       Duty                              kJ/hr -7.53e+06
-                        Flow                            kmol/hr  5.15e+03
-                        Cost                             USD/hr      2.51
-    Low pressure steam  Duty                              kJ/hr  1.35e+07
-                        Flow                            kmol/hr       347
-                        Cost                             USD/hr      82.5
-    Design              Theoretical feed stage                          8
-                        Theoretical stages                             16
-                        Minimum reflux                    Ratio      1.06
-                        Reflux                            Ratio      2.13
-                        Rectifier stages                               14
-                        Stripper stages                                26
-                        Rectifier height                     ft      33.2
-                        Stripper height                      ft      50.9
-                        Rectifier diameter                   ft      4.55
-                        Stripper diameter                    ft      3.66
-                        Rectifier wall thickness             in     0.312
-                        Stripper wall thickness              in     0.312
-                        Rectifier weight                     lb  6.76e+03
-                        Stripper weight                      lb  7.96e+03
-    Purchase cost       Rectifier trays                     USD  1.59e+04
-                        Stripper trays                      USD  2.01e+04
-                        Rectifier tower                     USD  4.89e+04
-                        Stripper platform and ladders       USD  1.48e+04
-                        Stripper tower                      USD  5.39e+04
-                        Rectifier platform and ladders      USD  1.81e+04
-                        Condenser - Floating head           USD  4.07e+04
-                        Boiler - Floating head              USD  2.98e+04
-    Total purchase cost                                     USD  2.42e+05
-    Utility cost                                         USD/hr      85.1
+    Divided Distillation Column                                Units        D1
+    Electricity         Power                                     kW     0.761
+                        Cost                                  USD/hr    0.0595
+    Cooling water       Duty                                   kJ/hr -7.54e+06
+                        Flow                                 kmol/hr  5.15e+03
+                        Cost                                  USD/hr      2.51
+    Low pressure steam  Duty                                   kJ/hr  1.34e+07
+                        Flow                                 kmol/hr       346
+                        Cost                                  USD/hr      82.4
+    Design              Theoretical feed stage                               8
+                        Theoretical stages                                  16
+                        Minimum reflux                         Ratio      1.06
+                        Reflux                                 Ratio      2.12
+                        Rectifier stages                                    13
+                        Stripper stages                                     26
+                        Rectifier height                          ft      31.7
+                        Stripper height                           ft      50.9
+                        Rectifier diameter                        ft      4.52
+                        Stripper diameter                         ft      3.64
+                        Rectifier wall thickness                  in     0.312
+                        Stripper wall thickness                   in     0.312
+                        Rectifier weight                          lb  6.45e+03
+                        Stripper weight                           lb  7.93e+03
+    Purchase cost       Rectifier trays                          USD  1.52e+04
+                        Stripper trays                           USD  2.01e+04
+                        Rectifier tower                          USD  4.76e+04
+                        Stripper platform and ladders            USD  1.42e+04
+                        Stripper tower                           USD  5.38e+04
+                        Rectifier platform and ladders           USD  1.81e+04
+                        Condenser - Floating head                USD  4.07e+04
+                        Reflux drum - Horizontal pressur...      USD  1.03e+04
+                        Reflux drum - Platform and ladders       USD  3.02e+03
+                        Pump - Pump                              USD  4.37e+03
+                        Pump - Motor                             USD       379
+                        Reboiler - Floating head                 USD  2.98e+04
+    Total purchase cost                                          USD  2.57e+05
+    Utility cost                                              USD/hr      84.9
     
     """
     line = 'Distillation'
@@ -1534,7 +1734,7 @@ class ShortcutColumn(Distillation, new_graphics=False):
         
     def _design(self):
         self._run_FenskeUnderwoodGilliland()
-        self._run_condenser_and_boiler()
+        self._run_condenser_and_reboiler()
         self._complete_distillation_column_design()
         
     def _run_FenskeUnderwoodGilliland(self):
@@ -1576,11 +1776,11 @@ class ShortcutColumn(Distillation, new_graphics=False):
     def _get_relative_volatilities_LHK(self):
         distillate, bottoms = self.outs
         LHK = self.LHK
-        condensate = self.condensate
+        condensate = self.condenser.outs[0]['l']
         K_light, K_heavy = distillate.get_molar_composition(LHK) / condensate.get_molar_composition(LHK)
         alpha_LHK_distillate = K_light/K_heavy
         
-        boilup = self.boilup
+        boilup = self.reboiler.outs[0]['g']
         K_light, K_heavy = boilup.get_molar_composition(LHK) / bottoms.get_molar_composition(LHK)
         alpha_LHK_distillate = K_light/K_heavy
         alpha_LHK_bottoms = K_light/K_heavy
@@ -1751,32 +1951,30 @@ class MESHDistillation(Distillation, new_graphics=False):
         convergenceiter=3,
     )
     
-    def __init__(self, ID='', ins=None, outs=(), thermo=None,
-                P=101325, *, LHK, N_stages, feed_stages, 
-                vapor_side_draws=None, liquid_side_draws=None,
-                specifications=None,
-                Lr=None,
-                Hr=None,
-                y_top=None,
-                x_bot=None, 
-                product_specification_format=None,
-                vessel_material='Carbon steel',
-                tray_material='Carbon steel',
-                tray_type='Sieve',
-                tray_spacing=450,
-                stage_efficiency=None,
-                velocity_fraction=0.8,
-                foaming_factor=1.0,
-                open_tray_area_fraction=0.1,
-                downcomer_area_fraction=None,
-                is_divided=False,
-                vacuum_system_preference='Liquid-ring pump',
-                condenser_thermo=None,
-                boiler_thermo=None,
-                partial_condenser=True,
+    def _init(self, 
+            LHK, N_stages, feed_stages, P=101325, 
+            vapor_side_draws=None, liquid_side_draws=None,
+            specifications=None,
+            Lr=None,
+            Hr=None,
+            y_top=None,
+            x_bot=None, 
+            product_specification_format=None,
+            vessel_material='Carbon steel',
+            tray_material='Carbon steel',
+            tray_type='Sieve',
+            tray_spacing=450,
+            stage_efficiency=None,
+            velocity_fraction=0.8,
+            foaming_factor=1.0,
+            open_tray_area_fraction=0.1,
+            downcomer_area_fraction=None,
+            is_divided=False,
+            vacuum_system_preference='Liquid-ring pump',
+            condenser_thermo=None,
+            boiler_thermo=None,
+            partial_condenser=True,
         ):
-        Unit.__init__(self, ID, ins, outs, thermo)
-        
         # Operation specifications
         self.P = P
         self.N_stages = N_stages
@@ -1865,6 +2063,6 @@ class MESHDistillation(Distillation, new_graphics=False):
         
     def _design(self):
         self._run_MESH()
-        self._run_condenser_and_boiler()
+        self._run_condenser_and_reboiler()
         self._complete_distillation_column_design()
         

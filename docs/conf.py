@@ -15,7 +15,7 @@
 import os
 import sys
 
-new_path = ['..\\', '..\\thermosteam\\', '..\\Bioindustrial-Park\\']
+new_path = ['..\\', '..\\thermosteam\\', '..\\Bioindustrial-Park\\', '..\\How2STEAM\\']
 for p in new_path:
      sys.path.insert(0, os.path.abspath(p))
 
@@ -63,12 +63,8 @@ autodoc_member_order = 'bysource'
 # ones.
 
 extensions = [
-    # 'jupyter_sphinx',
-    # "myst_parser",
-    # "numpydoc",
+    'sphinxcontrib.jquery', # Some extensions require jquery, which used to come with Sphinx before v6.
     "matplotlib.sphinxext.plot_directive",
-    # "myst_nb",
-    # "sphinx_design",
     'IPython.sphinxext.ipython_console_highlighting', # Fixes bug with pygments highlighting in nbsphinx (a workaround)
     'sphinx_design',
     'sphinx.ext.autodoc',
@@ -79,12 +75,14 @@ extensions = [
     'sphinx.ext.todo',
     'sphinx.ext.coverage',
     'sphinx.ext.mathjax',
-    'sphinx.ext.ifconfig',
+    # 'sphinx.ext.ifconfig',
     'sphinx.ext.autosummary',
     'sphinx_multitoc_numbering',
     'sphinx_autodoc_typehints',
     'myst_parser',
-    'nbsphinx']
+    'nbsphinx',
+    'nbsphinx_link',
+]
 
 try:
     import sphinx_autodoc_typehints as sat
@@ -235,7 +233,7 @@ master_doc = 'index'
 #
 # This is also used if you do content translation via gettext catalogs.
 # Usually you set "language" from the command line for these cases.
-language = None
+language = 'en'
 
 # List of patterns, relative to source directory, that match files and
 # directories to ignore when looking for source files.
@@ -264,12 +262,14 @@ html_theme_options = {
         'image_light': 'logo.png',
         'image_dark': 'logo_dark.png'
     },
-    "announcement": (
-        "<p>Join us on Feb 17, 9:15-10:15am CST, for a BioSTEAM workshop! "
-        "<a href='mailto: biosteamdevelopmentgroup@gmail.com'>Email us for details</a></p>"
-    ),
+    "show_toc_level": 2,
+    # "announcement": (
+    #     "<p>Join us on Feb 17, 9:15-10:15am CST, for a BioSTEAM workshop! "
+    #     "<a href='mailto: biosteamdevelopmentgroup@gmail.com'>Email us for details</a></p>"
+    # ),
     "external_links": [
       {"name": "Bioindustrial-Park", "url": "https://github.com/BioSTEAMDevelopmentGroup/Bioindustrial-Park"},
+      {"name": "How2STEAM", "url": "https://mybinder.org/v2/gh/BioSTEAMDevelopmentGroup/How2STEAM/HEAD"},
       {"name": "QSDsan", "url": "https://qsdsan.readthedocs.io/en/latest/"},
   ]
 }
@@ -366,7 +366,9 @@ texinfo_documents = [
 # If true, `todo` and `todoList` produce output, else they produce nothing.
 todo_include_todos = True
 
+# -- Options for markdown extentions -----------------------------------------
 
+myst_heading_anchors = 3
 
 
 

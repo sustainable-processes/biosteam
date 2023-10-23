@@ -94,10 +94,12 @@ class Junction(Unit):
         for ps in self._specifications: ps.compile(self)
     
     def _run(self): 
-        try: self._outs[0].copy_like(self._ins[0])
+        upstream = self._ins[0]
+        downstream = self._outs[0]
+        try: downstream.copy_like(upstream)
         except UndefinedChemical:
             self._reset_thermo(self._ins[0]._thermo)
-            self._outs[0].copy_like(self._ins[0])
+            downstream.copy_like(upstream)
     simulate = Unit.run
 
     def _get_tooltip_string(self):
@@ -108,3 +110,4 @@ class Junction(Unit):
     
     @property
     def _outlet_utility_indices(self): return {}
+

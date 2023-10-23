@@ -649,10 +649,7 @@ class TEA:
     @property
     def ROI(self) -> float:
         """Return on investment [1/yr] without accounting for annualized depreciation."""
-        FCI = self.FCI
-        net_earnings = self.net_earnings
-        TCI = FCI*(1.+self.WC_over_FCI)
-        return net_earnings/TCI
+        return self.net_earnings / self.TCI
     @property
     def net_earnings(self) -> float:
         """Net earnings without accounting for annualized depreciation."""
@@ -896,15 +893,26 @@ class TEA:
         else:
             return self.AOC - coproduct_sales
     
-    def solve_IRR(self):
+    def solve_IRR(self, financing=True):
         """Return the IRR at the break even point (NPV = 0) through cash flow analysis."""
         IRR = self._IRR
         if not IRR or np.isnan(IRR) or IRR < 0.: IRR = self.IRR
         if not IRR or np.isnan(IRR) or IRR < 0.: IRR = 0.10
-        args = (self.cashflow_array, self._get_duration_array())
-        IRR = flx.aitken_secant(NPV_at_IRR,
-                                IRR, 1.0001 * IRR + 1e-3, xtol=1e-6, ytol=10.,
-                                maxiter=200, args=args, checkiter=False)
+        if financing:
+            args = (self.cashflow_array, self._get_duration_array())
+            IRR = flx.aitken_secant(NPV_at_IRR,
+                                    IRR, 1.0001 * IRR + 1e-3, xtol=1e-6, ytol=10.,
+                                    maxiter=200, args=args, checkiter=False)
+        else:
+            financing_values = self.finance_fraction, self.finance_interest
+            self.finance_fraction = self.finance_interest = None
+            try:
+                args = (self.cashflow_array, self._get_duration_array())
+                IRR = flx.aitken_secant(NPV_at_IRR,
+                                        IRR, 1.0001 * IRR + 1e-3, xtol=1e-6, ytol=10.,
+                                        maxiter=200, args=args, checkiter=False)
+            finally:
+                self.finance_fraction, self.finance_interest = financing_values
         self._IRR = IRR
         return IRR
         
@@ -980,7 +988,7 @@ class TEA:
     
     def _info(self):
         return (f'{type(self).__name__}: {self.system}\n'
-                f' NPV: {self.NPV:,.0f} USD at {self.IRR:.1%} IRR')
+                f'NPV: {self.NPV:,.0f} USD at {self.IRR:.1%} IRR')
     
     def show(self):
         """Prints information on unit."""

@@ -13,11 +13,11 @@
 .. autoclass:: biosteam.units.mixing.MockMixer
 
 """
-from ..utils import ignore_docking_warnings
 from .._unit import Unit
 from .._graphics import mixer_graphics
 import flexsolve as flx
 import biosteam as bst
+from typing import Optional
 
 __all__ = ('Mixer', 'SteamMixer', 'FakeMixer', 'MockMixer')
 
@@ -31,6 +31,8 @@ class Mixer(Unit):
         Inlet fluids to be mixed.
     outs : 
         Mixed outlet fluid.
+    rigorous :
+        Whether to perform vapor-liquid equilibrium.
     
     Notes
     -----
@@ -61,7 +63,7 @@ class Mixer(Unit):
         flow (kmol/hr): Ethanol  30
     outs...
     [0] s3
-        phase: 'l', T: 315.11 K, P: 101325 Pa
+        phase: 'l', T: 315.14 K, P: 101325 Pa
         flow (kmol/hr): Ethanol  30
                         Water    20
     
@@ -75,47 +77,15 @@ class Mixer(Unit):
     def _assert_compatible_property_package(self): 
         pass # Not necessary for mixing streams
     
-    def __init__(self, ID='', ins=None, outs=(), thermo=None, rigorous=False):
-        Unit.__init__(self, ID, ins, outs, thermo)
+    def _init(self, rigorous: Optional[bool]=False,
+              conserve_phases: Optional[bool]=False):
         self.rigorous = rigorous
+        self.conserve_phases = conserve_phases
     
     def _run(self):
         s_out, = self.outs
-        s_out.mix_from(self.ins, vle=self.rigorous)
-        
-    @ignore_docking_warnings
-    def insert(self, stream):
-        """
-        Insert Mixer object between two units at a given stream connection.
-        
-        Examples
-        --------
-        >>> from biosteam import *
-        >>> settings.set_thermo(['Water'], cache=True)
-        >>> feed = Stream('feed')
-        >>> other_feed = Stream('other_feed')
-        >>> P1 = Pump('P1', feed, 'pump_outlet')
-        >>> H1 = HXutility('H1', P1-0, T=310)
-        >>> M1 = Mixer('M1', other_feed, 'mixer_outlet')
-        >>> M1.insert(P1-0)
-        >>> M1.show()
-        Mixer: M1
-        ins...
-        [0] other_feed
-            phase: 'l', T: 298.15 K, P: 101325 Pa
-            flow: 0
-        [1] pump_outlet  from  Pump-P1
-            phase: 'l', T: 298.15 K, P: 101325 Pa
-            flow: 0
-        outs...
-        [0] mixer_outlet  to  HXutility-H1
-            phase: 'l', T: 298.15 K, P: 101325 Pa
-            flow: 0
-        
-        """
-        sink = stream.sink
-        sink.ins.replace(stream, self.outs[0])
-        self.ins.append(stream)
+        s_out.mix_from(self.ins, vle=self.rigorous,
+                       conserve_phases=self.conserve_phases)
         
 
 class SteamMixer(Unit):
@@ -149,7 +119,7 @@ class SteamMixer(Unit):
     >>> M1 = bst.SteamMixer(None, ins=[feed, 'steam', 'process_water'], outs='outlet', T=431.15, P=557287.5, solids_loading=0.3)
     >>> M1.simulate()
     >>> M1.show('cwt100') # Note that outlet solids loading is not exactly 0.3 because of the steam requirement.
-    SteamMixer: M.1
+    SteamMixer
     ins...
     [0] feed
         phase: 'l', T: 298.15 K, P: 101325 Pa
@@ -174,7 +144,7 @@ class SteamMixer(Unit):
     >>> M1.solids_loading_includes_steam = True
     >>> M1.simulate()
     >>> M1.show('cwt100') # Now the outlet solids content is exactly 0.3
-    SteamMixer: M.1
+    SteamMixer
     ins...
     [0] feed
         phase: 'l', T: 298.15 K, P: 101325 Pa
@@ -202,11 +172,9 @@ class SteamMixer(Unit):
     _ins_size_is_fixed = False
     _graphics = mixer_graphics
     installation_cost = purchase_cost = 0.
-    def __init__(self, ID='', ins=None, outs=(), thermo=None, *, 
-                 P, T=None, solids_loading=None, 
-                 liquid_IDs=['7732-18-5'], solid_IDs=None,
-                 solids_loading_includes_steam=None):
-        Unit.__init__(self, ID, ins, outs, thermo)
+    def _init(self, P, T=None, solids_loading=None, 
+             liquid_IDs=['7732-18-5'], solid_IDs=None,
+             solids_loading_includes_steam=None):
         self.P = P
         self.T = T
         self.solids_loading = solids_loading
@@ -243,11 +211,20 @@ class SteamMixer(Unit):
                 F_mass_solids = F_mass_feed - available_water
             required_water = F_mass_solids * (1. - solids_loading) / solids_loading
             process_water.imol['7732-18-5'] = max(required_water - available_water, 0.) / 18.01528
-        mixed.mix_from(self.ins)
+        
+        mixed.mix_from(self.ins, energy_balance=False)
+        H = sum([i.H for i in self.ins])
+        Tmax = mixed.chemicals.Water.Tc - 1
+        mixed.T = Tmax
+        Hmax = mixed.H
+        if H > Hmax:
+            mixed.T = Tmax + (H - Hmax) / mixed.chemicals.Water.Cn('l', Tmax)
+        else:
+            mixed.H = H
         if self.T:
             return self.T - mixed.T
         else: # If no pressure, assume it is at the boiling point
-            P_new = mixed.chemicals.Water.Psat(min(mixed.T, mixed.chemicals.Water.Tc - 1))
+            P_new = mixed.chemicals.Water.Psat(min(mixed.T, Tmax))
             return self.P - P_new
     
     def _setup(self):

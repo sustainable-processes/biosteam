@@ -56,13 +56,12 @@ class Parameter(Feature):
         if not name: name, *_ = signature(setter).parameters.keys()
         super().__init__(format_title(name), units, element)
         if kind is None: kind = 'isolated'
-        if element is None: element = 'Biorefinery'
         self.setter = setter.setter if isinstance(setter, Parameter) else setter
         self.system = system
         self.distribution = distribution
         if not bounds:
             if distribution: bounds = (distribution.lower[0], distribution.upper[0])
-        if bounds and not baseline:
+        if bounds and baseline is None:
             baseline = 0.5 * (bounds[0] + bounds[1])
         self.baseline = baseline
         self.bounds = bounds

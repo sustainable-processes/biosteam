@@ -10,6 +10,7 @@
 from .._unit import Unit
 from .mixing import *
 from .splitting import *
+from .phase_equilibrium import *
 from .molecular_sieve import *
 from .vacuum_system import *
 from ._pump import *
@@ -18,6 +19,7 @@ from .tank import *
 from .distillation import *
 from ._duplicator import *
 from ._junction import *
+from ._scaler import *
 from ._balance import *
 from ._diagram_only_units import *
 from ._flash import *
@@ -34,7 +36,7 @@ from ._conveying_belt import *
 from ._vent_scrubber import *
 from ._vibrating_screen import *
 from ._carbon_capture import *
-from .cstr import *
+from .stirred_tank_reactor import *
 from .compressor import *
 from .turbine import *
 from .valve import *
@@ -43,6 +45,9 @@ from .size_reduction import *
 from .size_enlargement import *
 from .liquid_liquid_extraction import *
 from .adsorption import *
+from .auxiliary import *
+from .agitator import *
+from .stripping import * 
 
 from . import (
     _flash, 
@@ -52,13 +57,14 @@ from . import (
     _conveying_belt, 
     _vent_scrubber,
     _vibrating_screen,
-    _junction, 
+    _junction,
+    _scaler,
     _fermentation, 
     _enzyme_treatment, 
     _clarifier, 
     _balance,  
     _screw_feeder,
-    cstr,
+    stirred_tank_reactor,
     molecular_sieve,
     vacuum_system,
     adsorption,
@@ -70,6 +76,7 @@ from . import (
     liquid_liquid_extraction, 
     mixing, 
     splitting, 
+    phase_equilibrium,
     heat_exchange, 
     solids_separation,
     decorators, 
@@ -82,6 +89,9 @@ from . import (
     compressor,
     turbine,
     valve,
+    auxiliary,
+    agitator,
+    stripping,
 )
 
 
@@ -92,16 +102,18 @@ __all__ = ('Unit',
            *_flash.__all__,
            *mixing.__all__,
            *splitting.__all__,
+           *phase_equilibrium.__all__,
            *_pump.__all__,
            *heat_exchange.__all__,
            *_multi_effect_evaporator.__all__,
            *distillation.__all__,
            *tank.__all__,
-           *cstr.__all__,
+           *stirred_tank_reactor.__all__,
            *_conveying_belt.__all__,
            *_vent_scrubber.__all__,
            *_vibrating_screen.__all__,
            *_junction.__all__,
+           *_scaler.__all__,
            *solids_separation.__all__,
            *_fermentation.__all__, 
            *_enzyme_treatment.__all__,
@@ -121,11 +133,15 @@ __all__ = ('Unit',
            *turbine.__all__,
            *valve.__all__,
            *vacuum_system.__all__,
+           *auxiliary.__all__,
+           *agitator.__all__,
+           *stripping.__all__,
            'adsorption',
            'drying',
            'tank',
            'mixing',
            'splitting',
+           'phase_equilibrium',
            'distillation',
            'decorators',
            'design_tools',
@@ -134,6 +150,7 @@ __all__ = ('Unit',
            'liquid_liquid_extraction',
            'size_reduction',
            'size_enlargement',
+           'stripping',
 )
 
 

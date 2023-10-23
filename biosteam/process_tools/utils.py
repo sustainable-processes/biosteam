@@ -43,6 +43,7 @@ __all__ = (
     'heat_exchanger_operation',
     'connect_by_ID',
     'default_utilities',
+    'default_CEPCI',
     'default',
 )
 
@@ -199,29 +200,13 @@ def rename_units(units, area):
     ...          MultiEffectEvaporator(P=[101325, 9e4], V=0.5)]
     >>> rename_units(units, 200)
     >>> units
-    [<Mixer: M201>,
-     <Mixer: M202>,
-     <ShortcutColumn: D201>,
-     <Flash: F201>,
-     <Pump: P201>,
-     <Splitter: S201>,
-     <MixTank: T201>,
-     <StorageTank: T202>,
-     <MultiEffectEvaporator: E201>]
+    [<Mixer: M201>, <Mixer: M202>, <ShortcutColumn: D201>, <Flash: F201>, <Pump: P201>, <Splitter: S201>, <MixTank: T201>, <StorageTank: T202>, <MultiEffectEvaporator: E201>]
     
     >>> # ID conflicts are taken care of internally
     >>> mixer, *other_units = units
     >>> rename_units(other_units, 200)
     >>> units
-    [<Mixer: M201>,
-     <Mixer: M202>,
-     <ShortcutColumn: D201>,
-     <Flash: F201>,
-     <Pump: P201>,
-     <Splitter: S201>,
-     <MixTank: T201>,
-     <StorageTank: T202>,
-     <MultiEffectEvaporator: E201>]
+    [<Mixer: M201>, <Mixer: M202>, <ShortcutColumn: D201>, <Flash: F201>, <Pump: P201>, <Splitter: S201>, <MixTank: T201>, <StorageTank: T202>, <MultiEffectEvaporator: E201>]
     
     """
     area = int(area)
@@ -245,7 +230,7 @@ def heat_exchanger_utilities_from_units(units):
     including the condensers and boilers of distillation columns and
     flash vessel heat exchangers."""
     heat_utilities = sum([i.heat_utilities for i in units], [])
-    return [i for i in heat_utilities if i.hxn_ok]
+    return [i for i in heat_utilities if i.hxn_ok and i.flow > 0.]
 
 def ID_number(ID):
     """
@@ -499,7 +484,10 @@ def default_utilities():
     """Reset utilities back to BioSTEAM's defaults."""
     bst.HeatUtility.default_agents()
     bst.PowerUtility.default_price()
-    
+
+def default_CEPCI():
+    bst.CE = 567.5
+
 def default(utilities=True, CEPCI=True, flowsheet=False):
     """
     Reset utilities, flowsheets, and chemical plant cost index (CEPCI) back to 
@@ -507,7 +495,7 @@ def default(utilities=True, CEPCI=True, flowsheet=False):
     
     """
     if utilities: default_utilities()
-    if CEPCI: bst.CE = 567.5
+    if CEPCI: default_CEPCI()
     for i in (bst.Stream, bst.Unit, bst.System): i.ticket_numbers.clear()
     if flowsheet: 
         for i in bst.main_flowsheet.flowsheet: i.clear(False)
